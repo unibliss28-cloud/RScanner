@@ -1,0 +1,31 @@
+name: Parent Lead Scanner
+on:
+  schedule:
+    - cron: '0 * * * *'  # every 1 hour
+  workflow_dispatch:      # manual run button
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve > /tmp/ollama.log 2>&1 &
+          sleep 10
+          ollama pull llama3.2:1b
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run scanner
+        env:
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USER_AGENT: "parent-bot by you"
+        run: python scanner.py
