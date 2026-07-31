@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parent Lead Scanner</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="p-4 bg-gray-50">
+<h1 class="font-bold">Biz1 Lead Scanner</h1>
+<input id="ollamaUrl" class="w-full border p-2 mt-2" placeholder="Paste Ollama URL - ex: https://abc123.ngrok-free.app">
+<input id="keywords" class="w-full border p-2 mt-2" value="allowance, kids money">
+<button onclick="scan()" class="bg-black text-white w-full p-3 mt-3 rounded">SCAN REDDIT NOW</button>
+<div id="out" class="mt-4"></div>
+
+<script>
+async function scan(){
+  const subs = ["Parenting","SingleParents"];
+  let leads=[];
+  for(let s of subs){
+    let r = await fetch(`https://www.reddit.com/r/${s}/new.json?limit=10`);
+    let j = await r.json();
+    j.data.children.forEach(p=>{
+      if(p.data.title.toLowerCase().includes("allowance")){
+        leads.push(p.data);
+      }
+    });
+  }
+  // 2 min gap + Ollama draft
+  for(let l of leads){
+    await new Promise(r=>setTimeout(r, 120000)); // 2 min
+    let ai = await fetch(document.getElementById("ollamaUrl").value+"/api/generate",{
+      method:"POST",
+      body: JSON.stringify({model:"llama3.2:1b", prompt:`Draft helpful answer for: ${l.title}`, stream:false})
+    }).then(r=>r.json());
+
+    document.getElementById("out").innerHTML += `<div class="border p-2 mt-2"><b>${l.title}</b><p>${ai.response}</p><a href="https://reddit.com${l.permalink}" target="_blank">Open Post</a></div>`;
+  }
+}
+</script>
+</body>
+</html>
