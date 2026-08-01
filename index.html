@@ -1,1 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>RScanner Tier1</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-gray-50 p-3">
+<div class="max-w-md mx-auto bg-white rounded-xl shadow p-4">
+  <h1 class="font-black text-xl">RScanner Tier 1</h1>
+  <div class="flex gap-1 mt-3">
+    <button onclick="setPlatform('reddit')" id="btnReddit" class="bg-black text-white px-3 py-1 rounded-full text-xs">Reddit AUTO</button>
+    <button onclick="setPlatform('threads')" id="btnThreads" class="bg-gray-200 px-3 py-1 rounded-full text-xs">Threads</button>
+    <button onclick="setPlatform('x')" id="btnX" class="bg-gray-200 px-3 py-1 rounded-full text-xs">X</button>
+    <button onclick="setPlatform('quora')" id="btnQuora" class="bg-gray-200 px-3 py-1 rounded-full text-xs">Quora</button>
+  </div>
 
+  <input id="groqKey" class="w-full border rounded p-2 text-sm mt-3" placeholder="Groq gsk_... key">
+  <button onclick="scan()" id="scanBtn" class="bg-black text-white w-full p-3 rounded-xl mt-3 font-bold">SCAN REDDIT</button>
+  <div id="status" class="text- text-blue-600 mt-1"></div>
+  <div id="out" class="mt-3 space-y-3"></div>
+</div>
+<script>
+let platform='reddit';
+let seen=new Set(JSON.parse(localStorage.getItem('seenIds')||'[]'));
+let cache=JSON.parse(localStorage.getItem('leadsCache')||'[]');
+groqKey.value=localStorage.getItem('groqKey')||''; groqKey.oninput=()=>localStorage.setItem('groqKey',groqKey.value);
+window.onload=()=>render(cache);
+
+function setPlatform(p){
+  platform=p;
+  ['Reddit','Threads','X','Quora'].forEach(x=>{ document.getElementById('btn'+x).className='bg-gray-200 px-3 py-1 rounded-full text-xs'; });
+  document.getElementById('btn'+p.charAt(0).toUpperCase()+p.slice(1)).className='bg-black text-white px-3 py-1 rounded-full text-xs';
+  const out=document.getElementById('out'); out.innerHTML='';
+  const keywords=["pocket money","kids allowance","how much allowance","teach kids money"];
+  if(p==='threads'){
+    keywords.forEach(k=>{ let d=document.createElement('div'); d.className='border p-3 rounded-lg'; d.innerHTML=`<div class="text-sm font-bold">${k}</div><a href="https://www.threads.net/search?q=${encodeURIComponent(k)}" target="_blank" class="text-xs bg-black text-white px-3 py-1 rounded-full mt-2 inline-block">Search on Threads</a>`; out.appendChild(d); });
+  }
+  if(p==='x'){
+    keywords.forEach(k=>{ let d=document.createElement('div'); d.className='border p-3 rounded-lg'; d.innerHTML=`<div class="text-sm font-bold">${k}</div><a href="https://twitter.com/search?q=${encodeURIComponent(k)}%20allowance%20kids&f=live" target="_blank" class="text-xs bg-black text-white px-3 py-1 rounded-full mt-2 inline-block">Search on X</a>`; out.appendChild(d); });
+  }
+  if(p==='quora'){
+    keywords.forEach(k=>{ let d=document.createElement('div'); d.className='border p-3 rounded-lg'; d.innerHTML=`<div class="text-sm font-bold">${k}</div><a href="https://www.quora.com/search?q=${encodeURIComponent(k)}" target="_blank" class="text-xs bg-black text-white px-3 py-1 rounded-full mt-2 inline-block">Search on Quora</a>`; out.appendChild(d); });
+  }
+  if(p==='reddit') render(cache);
+}
+
+function render(list){ const out=document.getElementById('out'); out.innerHTML=''; list.slice().reverse().forEach(c=>{ let d=document.createElement('div'); d.className='border rounded-lg p-3'; d.innerHTML=`<div class="font-bold text-sm">${c.title}</div><div class="flex gap-2 mt-2"><a href="${c.url}" target="_blank" class="text-xs bg-gray-100 px-3 py-1 rounded-full">Open</a><button onclick="draft(this,'${c.title.replace(/'/g,'')}')" class="text-xs bg-blue-600 text-white px-3 py-1 rounded-full">AI Draft</button></div><div class="draft text-xs mt-2 bg-yellow-50 p-2 rounded hidden"></div>`; out.appendChild(d); }); }
+
+async function scan(){
+  if(platform!=='reddit'){ alert('Auto scan works only for Reddit. For Threads/X/Quora tap Search buttons.'); return; }
+  const keywords=["pocket money","kids allowance","how much allowance","teach kids money","allowance age"];
+  const subs=["Parenting","Mommit","daddit","SingleParents"];
+  status.innerText='Scanning...';
+  for(let sub of subs){ for(let k of keywords){ try{ let r=await fetch(`https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(k)}&restrict_sr=1&sort=new&limit=2`); let j=await r.json(); for(let ch of j.data.children){ if(seen.has(ch.data.id)) continue; seen.add(ch.data.id); cache.push({id:ch.data.id,title:ch.data.title,url:`https://reddit.com${ch.data.permalink}`}); } }catch(e){} await new Promise(r=>setTimeout(r,1000)); } }
+  localStorage.setItem('seenIds',JSON.stringify([...seen])); localStorage.setItem('leadsCache',JSON.stringify(cache.slice(-100))); render(cache.slice(-100)); status.innerText=`Saved ${cache.length} Reddit leads`;
+}
+async function draft(btn,title){ const key=groqKey.value.trim(); if(!key){alert('Paste gsk_');return;} const div=btn.parentElement.nextElementSibling; div.classList.remove('hidden'); div.innerText='Drafting...'; let r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},body:JSON.stringify({model:'llama-3.1-8b-instant',messages:[{role:'user',content:`Parent says: "${title}". Give 3 line helpful Tier1 US parent tone reply about kids money habits.`}]})}); let j=await r.json(); div.innerText=j.choices[0].message.content; }
+</script>
+</body>
+</html>
