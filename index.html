@@ -2,89 +2,96 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RScanner v2 - Phone Only</title>
+<title>RScanner Auto</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 p-3">
 <div class="max-w-md mx-auto bg-white rounded-xl shadow p-4">
-  <h1 class="font-black text-xl">RScanner v2</h1>
-  <p class="text-xs text-gray-500">Phone only - works on Jio / wifi - no Reddit keys</p>
+  <h1 class="font-black text-xl">RScanner Auto</h1>
+  <p class="text- text-gray-500">Auto saves leads in phone - works on wifi / Jio</p>
 
-  <label class="text-xs font-bold mt-3 block">Groq API Key (paste gsk_...)</label>
+  <label class="text-xs font-bold mt-3 block">Groq Key gsk_...</label>
   <input id="groqKey" class="w-full border rounded p-2 text-sm" placeholder="gsk_...">
 
-  <label class="text-xs font-bold mt-3 block">Keywords (product linked)</label>
-  <input id="keywords" class="w-full border rounded p-2 text-sm" value="pocket money, allowance, kids allowance, how much allowance, allowance age, kids spending, kids saving, teach kids money, chores for money, financial literacy kids">
+  <div class="flex gap-2 mt-3">
+    <button onclick="scan()" id="scanBtn" class="bg-black text-white flex-1 p-3 rounded-xl font-bold">SCAN NOW</button>
+    <button onclick="toggleAuto()" id="autoBtn" class="bg-gray-200 flex-1 p-3 rounded-xl font-bold text-sm">AUTO: OFF</button>
+  </div>
 
-  <label class="text-xs font-bold mt-3 block">Subreddits</label>
-  <input id="subs" class="w-full border rounded p-2 text-sm" value="Parenting,Mommit,daddit,SingleParents,personalfinance,povertyfinance,Parenting101,toddlers">
-
-  <button onclick="scan()" id="scanBtn" class="bg-black text-white w-full p-3 rounded-xl mt-4 font-bold">SCAN NOW</button>
-  <div id="status" class="text-xs text-center mt-2 text-blue-600"></div>
-  <div id="out" class="mt-4 space-y-3"></div>
+  <div class="flex justify-between mt-2">
+    <span id="status" class="text- text-blue-600">Idle</span>
+    <button onclick="clearLeads()" class="text- text-red-500">Clear</button>
+  </div>
+  <div id="out" class="mt-3 space-y-3"></div>
 </div>
 
 <script>
-const groqKey = document.getElementById('groqKey');
-groqKey.value = localStorage.getItem('groqKey') || '';
+let autoInterval = null;
+let seenIds = new Set(JSON.parse(localStorage.getItem('seenIds')||'[]'));
+let leadsCache = JSON.parse(localStorage.getItem('leadsCache')||'[]');
+
+groqKey.value = localStorage.getItem('groqKey')||'';
 groqKey.oninput = ()=> localStorage.setItem('groqKey', groqKey.value);
 
-async function scan(){
-  const kw = document.getElementById('keywords').value.toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
-  const subList = document.getElementById('subs').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const out = document.getElementById('out');
-  const status = document.getElementById('status');
-  out.innerHTML = '';
-  status.innerText = 'Searching Reddit... wait 20 sec';
+window.onload = ()=> { render(leadsCache); if(leadsCache.length) status.innerText=`Loaded ${leadsCache.length} saved leads`; };
 
-  for(let sub of subList){
-    for(let k of kw.slice(0,6)){ // take 6 keywords to avoid block
-      try{
-        let url = `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(k)}&restrict_sr=1&sort=new&limit=3`;
-        let res = await fetch(url);
-        if(!res.ok) continue;
-        let data = await res.json();
-        if(!data.data) continue;
-        for(let c of data.data.children){
-          let title = c.data.title.replace(/'/g,"").replace(/"/g,'');
-          let d=document.createElement('div');
-          d.className='border rounded-lg p-3';
-          d.innerHTML=`<div class="font-bold text-sm">${c.data.title}</div>
-          <div class="text- text-gray-500 mt-1">r/${sub} • keyword: ${k} • ${Math.floor((Date.now()/1000 - c.data.created_utc)/3600)}h ago</div>
-          <div class="flex gap-2 mt-2">
-          <a href="https://reddit.com${c.data.permalink}" target="_blank" class="text-xs bg-gray-100 px-3 py-1 rounded-full">Open Reddit</a>
-          <button onclick="draft(this,'${title}')" class="text-xs bg-blue-600 text-white px-3 py-1 rounded-full">AI Draft</button>
-          </div>
-          <div class="draft text-xs mt-2 bg-yellow-50 p-2 rounded hidden"></div>`;
-          out.appendChild(d);
-        }
-      }catch(e){ console.log(e); }
-      await new Promise(r=>setTimeout(r,700));
-    }
-  }
-  status.innerText = `Found ${out.children.length} leads. If 0, try again in 1 min (Reddit limit)`;
+function render(list){
+  const out=document.getElementById('out'); out.innerHTML='';
+  list.slice().reverse().forEach(c=>{
+    let d=document.createElement('div'); d.className='border rounded-lg p-3';
+    d.innerHTML=`<div class="font-bold text-sm">${c.title}</div>
+    <div class="text- text-gray-500">r/${c.sub} • ${c.kw} • ${c.time}</div>
+    <div class="flex gap-2 mt-2"><a href="${c.url}" target="_blank" class="text-xs bg-gray-100 px-3 py-1 rounded-full">Open</a>
+    <button onclick="draft(this,'${c.title.replace(/'/g,'')}')" class="text-xs bg-blue-600 text-white px-3 py-1 rounded-full">AI Draft</button></div>
+    <div class="draft text-xs mt-2 bg-yellow-50 p-2 rounded hidden"></div>`;
+    out.appendChild(d);
+  });
 }
 
-async function draft(btn, title){
-  const key = document.getElementById('groqKey').value.trim();
-  if(!key){ alert('Paste your gsk_ key first'); return; }
-  const div = btn.parentElement.nextElementSibling;
-  div.classList.remove('hidden');
-  div.innerText='Generating helpful reply...';
+async function scan(){
+  const keywords = ["pocket money","kids allowance","how much allowance","teach kids money","allowance age","chores for money"];
+  const subs = ["Parenting","Mommit","daddit","SingleParents","personalfinance"];
+  status.innerText='Auto scanning... keep app open';
+  let newCount=0;
+  for(let sub of subs){
+    for(let k of keywords){
+      try{
+        let res = await fetch(`https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(k)}&restrict_sr=1&sort=new&limit=3&t=day`);
+        if(!res.ok) continue;
+        let data = await res.json();
+        for(let ch of data.data.children){
+          if(seenIds.has(ch.data.id)) continue;
+          seenIds.add(ch.data.id);
+          leadsCache.push({id:ch.data.id, title:ch.data.title, sub, kw:k, url:`https://reddit.com${ch.data.permalink}`, time:new Date().toLocaleTimeString()});
+          newCount++;
+        }
+      }catch(e){}
+      await new Promise(r=>setTimeout(r,1200));
+    }
+  }
+  localStorage.setItem('seenIds', JSON.stringify([...seenIds]));
+  localStorage.setItem('leadsCache', JSON.stringify(leadsCache.slice(-100)));
+  render(leadsCache.slice(-100));
+  status.innerText = `Found ${newCount} new, total ${leadsCache.length} saved. Last: ${new Date().toLocaleTimeString()}`;
+}
+
+function toggleAuto(){
+  if(autoInterval){ clearInterval(autoInterval); autoInterval=null; autoBtn.innerText='AUTO: OFF'; autoBtn.className='bg-gray-200 flex-1 p-3 rounded-xl font-bold text-sm'; status.innerText='Auto stopped'; return; }
+  autoBtn.innerText='AUTO: ON (5min)'; autoBtn.className='bg-green-600 text-white flex-1 p-3 rounded-xl font-bold text-sm';
+  scan();
+  autoInterval = setInterval(scan, 5*60*1000); // 5 min
+  status.innerText='AUTO ON - will scan every 5 min while this tab is open';
+}
+
+function clearLeads(){ localStorage.removeItem('leadsCache'); localStorage.removeItem('seenIds'); leadsCache=[]; seenIds=new Set(); render([]); status.innerText='Cleared'; }
+
+async function draft(btn,title){
+  const key=groqKey.value.trim(); if(!key){alert('Paste gsk_');return;}
+  const div=btn.parentElement.nextElementSibling; div.classList.remove('hidden'); div.innerText='Drafting...';
   try{
-    let r = await fetch('https://api.groq.com/openai/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
-      body: JSON.stringify({
-        model:'llama-3.1-8b-instant',
-        messages:[{role:'user',content:`A parent on Reddit says: "${title}". Write 3 lines empathetic helpful reply about teaching kids money habits, no links, no selling.`}],
-        temperature:0.7
-      })
-    });
-    let j=await r.json();
-    if(j.choices) div.innerText = j.choices[0].message.content;
-    else div.innerText = 'Error: ' + JSON.stringify(j).slice(0,200);
-  }catch(e){ div.innerText='Error: check internet / key'; }
+    let r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`}, body:JSON.stringify({model:'llama-3.1-8b-instant', messages:[{role:'user',content:`Parent: "${title}". 3 line helpful reply about kids money habits, no links.`}], temperature:0.7})});
+    let j=await r.json(); div.innerText=j.choices[0].message.content;
+  }catch(e){div.innerText='Error check key';}
 }
 </script>
 </body>
