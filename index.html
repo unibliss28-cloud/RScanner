@@ -1,108 +1,105 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RScanner Tier1</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RScanner - Parents</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 p-3">
-<div class="max-w-md mx-auto bg-white rounded-2xl shadow p-4">
+<body class="bg-[#fafaf7] p-4">
+<div class="max-w-md mx-auto bg-white rounded- shadow-sm border p-5">
 
-  <h1 class="font-black text-xl">RScanner Tier 1</h1>
-  <p class="text- text-gray-500 mb-3">Reddit AUTO + Threads / X / Quora</p>
+  <h1 class="font-black text-2xl">RScanner</h1>
+  <p class="text- text-gray-500">For parents with young kids, teens & expecting parents</p>
 
-  <input id="groqKey" class="w-full border rounded-lg p-2.5 text-sm" placeholder="Paste Groq gsk_ key here">
+  <input id="groqKey" class="w-full mt-4 border rounded-xl p-3 text-sm bg-gray-50" placeholder="Groq gsk_ key (saved in phone only)">
 
-  <div class="flex gap-2 mt-3">
-    <button onclick="startReddit()" class="bg-black text-white flex-1 py-3 rounded-xl font-bold text-sm">SCAN REDDIT</button>
-    <button onclick="toggleAuto()" id="autoBtn" class="bg-gray-100 flex-1 py-3 rounded-xl font-bold text-xs">AUTO OFF</button>
+  <!-- Tier 1 quick jump -->
+  <div class="flex gap-2 mt-4">
+    <a href="https://www.threads.net/search?q=pocket%20money%20kids" target="_blank" class="flex-1 text-center bg-gray-50 border py-2 rounded-full text- font-bold">Threads ↗</a>
+    <a href="https://twitter.com/search?q=kids%20allowance&f=live" target="_blank" class="flex-1 text-center bg-gray-50 border py-2 rounded-full text- font-bold">X ↗</a>
+    <a href="https://www.quora.com/search?q=teach%20kids%20money" target="_blank" class="flex-1 text-center bg-gray-50 border py-2 rounded-full text- font-bold">Quora ↗</a>
   </div>
 
-  <div class="grid grid-cols-3 gap-2 mt-3">
-    <a id="tThreads" target="_blank" class="bg-gray-50 border text-center py-2 rounded-lg text-xs font-bold">Threads ↗</a>
-    <a id="tX" target="_blank" class="bg-gray-50 border text-center py-2 rounded-lg text-xs font-bold">X / Twitter ↗</a>
-    <a id="tQuora" target="_blank" class="bg-gray-50 border text-center py-2 rounded-lg text-xs font-bold">Quora ↗</a>
-  </div>
+  <button onclick="scan()" id="scanBtn" class="w-full bg-black text-white mt-5 py-4 rounded-full font-black text- active:scale-95 transition">✨ SCAN NOW</button>
 
-  <div id="status" class="text- text-blue-600 mt-3 text-center">Idle - tap SCAN</div>
-  <div id="out" class="mt-3 space-y-3"></div>
+  <div id="status" class="text- text-center mt-3 text-gray-400">Tap scan - it feels gleeful</div>
+  <div id="out" class="mt-4 space-y-3"></div>
 
 </div>
 
 <script>
-let autoTimer=null;
-let seen=new Set(JSON.parse(localStorage.getItem('seenIds')||'[]'));
-let cache=JSON.parse(localStorage.getItem('leadsCache')||'[]');
 const groqKey=document.getElementById('groqKey');
 groqKey.value=localStorage.getItem('groqKey')||'';
 groqKey.oninput=()=>localStorage.setItem('groqKey',groqKey.value);
 
-const KW="pocket money";
-document.getElementById('tThreads').href=`https://www.threads.net/search?q=${encodeURIComponent(KW)}`;
-document.getElementById('tX').href=`https://twitter.com/search?q=${encodeURIComponent(KW)}&f=live`;
-document.getElementById('tQuora').href=`https://www.quora.com/search?q=${encodeURIComponent(KW)}`;
-
-window.onload=()=>{ if(cache.length){ render(); status.innerText=`Loaded ${cache.length} saved leads`; } };
+let cache=JSON.parse(localStorage.getItem('leadsCache')||'[]');
+if(cache.length) render();
 
 function render(){
   const out=document.getElementById('out'); out.innerHTML='';
   cache.slice().reverse().forEach(c=>{
-    let div=document.createElement('div'); div.className='border rounded-xl p-3';
-    div.innerHTML=`<div class="font-bold text-">${c.title}</div>
-    <div class="text- text-gray-400 mt-1">r/${c.sub} • ${c.ago}</div>
-    <div class="flex gap-2 mt-2"><a href="${c.url}" target="_blank" class="text-xs bg-gray-100 px-3 py-1.5 rounded-full">Open</a>
-    <button onclick="draft(this,'${c.title.replace(/'/g,'')}')" class="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-full">AI Draft</button></div>
-    <div class="draft hidden mt-2 text-xs bg-yellow-50 p-2 rounded-lg"></div>`;
-    out.appendChild(div);
+    let d=document.createElement('div'); d.className='border rounded-2xl p-3.5 bg-white';
+    d.innerHTML=`<div class="font-bold text- leading-tight">${c.title}</div>
+    <div class="text- text-gray-400 mt-1">r/${c.sub} • ${c.tag}</div>
+    <div class="flex gap-2 mt-3">
+      <a href="${c.url}" target="_blank" class="text-xs bg-gray-900 text-white px-4 py-2 rounded-full">Open Reddit</a>
+      <button onclick="draft(this,'${c.title.replace(/'/g,'')}')" class="text-xs bg-white border-black px-4 py-2 rounded-full font-bold">AI Draft</button>
+    </div>
+    <div class="draft hidden mt-3 text-xs bg-[#fff9c4] p-3 rounded-xl leading-relaxed"></div>`;
+    out.appendChild(d);
   });
 }
 
-async function startReddit(){
-  const subs=["Parenting","Mommit","daddit","SingleParents","Parenting101"];
-  const kws=["pocket money","kids allowance","allowance age","teach kids money"];
-  const statusEl=document.getElementById('status');
-  statusEl.innerText='Scanning Reddit... (20 sec) keep mobile data on';
-  document.getElementById('out').innerHTML='';
-  let found=0;
+async function scan(){
+  const btn=document.getElementById('scanBtn');
+  const status=document.getElementById('status');
+  btn.innerText='🔍 Hunting leads...'; btn.disabled=true;
+
+  // BROAD parent keywords - young + teen + expecting
+  const kws=[
+    {q:"toddler allowance", tag:"Young kids"},
+    {q:"pocket money kids", tag:"Young kids"},
+    {q:"teen allowance", tag:"Teen"},
+    {q:"teenager spending money", tag:"Teen"},
+    {q:"expecting parents finance", tag:"Expecting"},
+    {q:"teach kids about money", tag:"All parents"}
+  ];
+  const subs=["Parenting","Mommit","daddit","toddlers","ParentingTeens","BeyondTheBump","BabyBumps","Pregnant","Parenting101"];
+
+  let newLeads=[];
   for(let sub of subs){
-    for(let k of kws){
+    for(let kw of kws){
       try{
-        let res=await fetch(`https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(k)}&restrict_sr=1&sort=new&limit=2&t=week`);
+        let res=await fetch(`https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(kw.q)}&restrict_sr=1&sort=new&limit=2&t=month`);
         if(!res.ok) continue;
         let j=await res.json();
         for(let ch of j.data.children){
-          if(seen.has(ch.data.id)) continue;
-          seen.add(ch.data.id);
-          cache.push({id:ch.data.id, title:ch.data.title, sub:sub, url:`https://reddit.com${ch.data.permalink}`, ago: new Date(ch.data.created_utc*1000).toLocaleDateString() });
-          found++;
+          if(cache.find(x=>x.id===ch.data.id)) continue;
+          newLeads.push({id:ch.data.id, title:ch.data.title, sub:sub, tag:kw.tag, url:`https://reddit.com${ch.data.permalink}`});
         }
       }catch(e){}
-      await new Promise(r=>setTimeout(r,1000));
+      await new Promise(r=>setTimeout(r,800));
     }
   }
-  localStorage.setItem('seenIds', JSON.stringify([...seen]));
-  localStorage.setItem('leadsCache', JSON.stringify(cache.slice(-80)));
-  render();
-  statusEl.innerText=`Done. ${found} new, ${cache.length} total saved.`;
-  if(found==0 && cache.length==0) statusEl.innerText='Reddit blocked on this network - try Wifi or wait 2 min and tap SCAN again';
-}
 
-function toggleAuto(){
-  const btn=document.getElementById('autoBtn');
-  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; btn.innerText='AUTO OFF'; btn.className='bg-gray-100 flex-1 py-3 rounded-xl font-bold text-xs'; return; }
-  btn.innerText='AUTO ON (5m)'; btn.className='bg-green-600 text-white flex-1 py-3 rounded-xl font-bold text-xs';
-  startReddit();
-  autoTimer=setInterval(startReddit, 5*60*1000);
+  cache=[...cache,...newLeads].slice(-100);
+  localStorage.setItem('leadsCache', JSON.stringify(cache));
+  render();
+
+  // gleeful effect
+  btn.innerText=`🎉 Found ${newLeads.length} new!`;
+  status.innerText=`Total ${cache.length} leads saved • ${new Date().toLocaleTimeString()}`;
+  setTimeout(()=>{ btn.innerText='✨ SCAN NOW'; btn.disabled=false; }, 2000);
+  if(newLeads.length==0 && cache.length==0) status.innerText='Reddit limit hit - wait 60 sec and tap again, or try on Wifi';
 }
 
 async function draft(btn,title){
-  const key=groqKey.value.trim(); if(!key){ alert('Paste gsk_ key first'); return; }
-  const div=btn.parentElement.nextElementSibling; div.classList.remove('hidden'); div.innerText='Writing reply...';
+  const key=groqKey.value.trim(); if(!key){alert('Paste gsk_ key');return;}
+  const div=btn.parentElement.nextElementSibling; div.classList.remove('hidden'); div.innerText='Writing parent-friendly reply...';
   try{
-    let r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},body:JSON.stringify({model:'llama-3.1-8b-instant',messages:[{role:'user',content:`Parent post: "${title}". Write 3 line empathetic helpful US parent reply about teaching kids money habits, no links.`}]})});
+    let r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},body:JSON.stringify({model:'llama-3.1-8b-instant',messages:[{role:'user',content:`Reddit parent post: "${title}". Write 3 line empathetic helpful reply for young/teen/expecting parent about teaching kids money habits. Warm US Tier 1 parent tone, no links, no selling.`}]})});
     let j=await r.json(); div.innerText=j.choices[0].message.content;
-  }catch(e){ div.innerText='Check Groq key / internet'; }
+  }catch(e){ div.innerText='Check key / internet'; }
 }
 </script>
 </body>
