@@ -1,8 +1,8 @@
 name: Parent Lead Scanner
 on:
+  workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'  # every 1 hour
-  workflow_dispatch:      # manual run button
+    - cron: '0 * * * *'
 
 jobs:
   scan:
@@ -13,19 +13,25 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install Ollama
-        run: |
-          curl -fsSL https://ollama.com/install.sh | sh
-          ollama serve > /tmp/ollama.log 2>&1 &
-          sleep 10
-          ollama pull llama3.2:1b
+      - name: Fix - create data folder
+        run: mkdir -p data && echo "[]" > data/leads.json
 
       - name: Install deps
-        run: pip install -r requirements.txt
+        run: pip install praw requests
 
-      - name: Run scanner
+      - name: Scan only - no Ollama
         env:
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
-          REDDIT_USER_AGENT: "parent-bot by you"
-        run: python scanner.py
+          REDDIT_USER_AGENT: "RScanner by unibliss28-cloud"
+        run: |
+          python -c "
+          import praw, os, json
+          reddit = praw.Reddit(client_id=os.getenv('REDDIT_CLIENT_ID'), client_secret=os.getenv('REDDIT_CLIENT_SECRET'), user_agent=os.getenv('REDDIT_USER_AGENT'))
+          posts=[]
+          for p in reddit.subreddit('Parenting+SingleParents').new(limit=15):
+            if 'allowance' in p.title.lower():
+              posts.append({'title': p.title, 'url': 'https://reddit.com'+p.permalink})
+          print(posts)
+          json.dump(posts, open('data/leads.json','w'), indent=2)
+          "
