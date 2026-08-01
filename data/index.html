@@ -1,39 +1,91 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Parent Lead Scanner</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RScanner - Parent Lead Scanner</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="p-4 bg-gray-50">
-<h1 class="font-bold">Biz1 Lead Scanner</h1>
-<input id="ollamaUrl" class="w-full border p-2 mt-2" placeholder="Paste Ollama URL - ex: https://abc123.ngrok-free.app">
-<input id="keywords" class="w-full border p-2 mt-2" value="allowance, kids money">
-<button onclick="scan()" class="bg-black text-white w-full p-3 mt-3 rounded">SCAN REDDIT NOW</button>
-<div id="out" class="mt-4"></div>
+<body class="bg-gray-50 min-h-screen p-3">
+<div class="max-w-md mx-auto bg-white rounded-xl shadow p-4">
+  <h1 class="font-black text-xl">RScanner v2</h1>
+  <p class="text-xs text-gray-500">Works on phone - no Reddit keys needed</p>
+
+  <label class="text-xs font-bold mt-3 block">Your Ollama URL (from ngrok)</label>
+  <input id="ollamaUrl" class="w-full border rounded p-2 text-sm" placeholder="https://abc123.ngrok-free.app">
+  
+  <label class="text-xs font-bold mt-3 block">Keywords</label>
+  <input id="keywords" class="w-full border rounded p-2 text-sm" value="allowance, kids money, kids won't save">
+  
+  <label class="text-xs font-bold mt-3 block">Subreddits</label>
+  <input id="subs" class="w-full border rounded p-2 text-sm" value="Parenting,SingleParents,personalfinance">
+
+  <button onclick="scan()" id="scanBtn" class="bg-black text-white w-full p-3 rounded-xl mt-4 font-bold">SCAN NOW (2 min gap)</button>
+  
+  <div id="status" class="text-xs text-center mt-2 text-blue-600"></div>
+  <div id="out" class="mt-4 space-y-3"></div>
+</div>
 
 <script>
-async function scan(){
-  const subs = ["Parenting","SingleParents"];
-  let leads=[];
-  for(let s of subs){
-    let r = await fetch(`https://www.reddit.com/r/${s}/new.json?limit=10`);
-    let j = await r.json();
-    j.data.children.forEach(p=>{
-      if(p.data.title.toLowerCase().includes("allowance")){
-        leads.push(p.data);
-      }
-    });
-  }
-  // 2 min gap + Ollama draft
-  for(let l of leads){
-    await new Promise(r=>setTimeout(r, 120000)); // 2 min
-    let ai = await fetch(document.getElementById("ollamaUrl").value+"/api/generate",{
-      method:"POST",
-      body: JSON.stringify({model:"llama3.2:1b", prompt:`Draft helpful answer for: ${l.title}`, stream:false})
-    }).then(r=>r.json());
+// save url
+ollamaUrl.value = localStorage.getItem('ollamaUrl') || '';
+ollamaUrl.oninput = ()=> localStorage.setItem('ollamaUrl', ollamaUrl.value);
 
-    document.getElementById("out").innerHTML += `<div class="border p-2 mt-2"><b>${l.title}</b><p>${ai.response}</p><a href="https://reddit.com${l.permalink}" target="_blank">Open Post</a></div>`;
+async function scan(){
+  const kw = keywords.value.toLowerCase().split(',').map(s=>s.trim());
+  const subList = subs.value.split(',').map(s=>s.trim());
+  const out = document.getElementById('out');
+  const status = document.getElementById('status');
+  out.innerHTML = '';
+  
+  for(let sub of subList){
+    status.innerText = `Scanning r/${sub}...`;
+    try{
+      let res = await fetch(`https://www.reddit.com/r/${sub}/new.json?limit=20`, {cache: 'no-store'});
+      let data = await res.json();
+      for(let child of data.data.children){
+        let title = child.data.title.toLowerCase();
+        if(kw.some(k=> title.includes(k))){
+          let card = document.createElement('div');
+          card.className = 'border rounded-lg p-3';
+          card.innerHTML = `
+            <div class="font-bold text-sm">${child.data.title}</div>
+            <div class="text-xs text-gray-500">r/${sub} • ${child.data.author}</div>
+            <div class="flex gap-2 mt-2">
+              <a href="https://reddit.com${child.data.permalink}" target="_blank" class="text-xs bg-gray-100 px-2 py-1 rounded">Open Post</a>
+              <button onclick="draft(this,'${child.data.title.replace(/'/g,"")}')" class="text-xs bg-blue-600 text-white px-2 py-1 rounded">Draft with Ollama (2 min)</button>
+            </div>
+            <div class="draft text-xs mt-2 bg-yellow-50 p-2 rounded hidden"></div>
+          `;
+          out.appendChild(card);
+        }
+      }
+    }catch(e){ status.innerText = 'Reddit blocked - try with VPN, retrying...'; }
+  }
+  status.innerText = `Found ${out.children.length} leads. Click Draft to generate.`;
+}
+
+async function draft(btn, title){
+  const url = ollamaUrl.value.trim();
+  if(!url){ alert('Paste your ngrok Ollama URL first'); return; }
+  const draftDiv = btn.parentElement.nextElementSibling;
+  draftDiv.classList.remove('hidden');
+  draftDiv.innerText = 'Waiting 2 min gap + generating...';
+  
+  let count = 120;
+  let timer = setInterval(()=>{ draftDiv.innerText = `2 min gap... ${count--}s`; if(count<0) clearInterval(timer); }, 1000);
+  await new Promise(r=>setTimeout(r, 120000));
+
+  try{
+    let res = await fetch(`${url}/api/generate`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+      body: JSON.stringify({model:'llama3.2:1b', prompt:`You are single mom finance coach. Parent asks: ${title}. Give 3 line helpful value answer, no links, friendly.`, stream:false})
+    });
+    let j = await res.json();
+    draftDiv.innerText = j.response;
+  }catch(e){
+    draftDiv.innerText = 'Error: Is ollama serve running + ngrok active? Check URL';
   }
 }
 </script>
